@@ -1,0 +1,7 @@
+VM_Translator
+
+.vscode/
+
+*.asm
+
+*.vm
