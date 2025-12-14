@@ -16,12 +16,12 @@ std::map<std::string, std::string> jump = {
     {"lt", "JLT"}  
 };
 
-void write_push_pop(std::ofstream& output_file, std::string command, std::string segment_type, int index);
+void write_push_pop(std::ofstream& output_file, std::string filename, std::string command, std::string segment_type, int index);
 void write_stack_commands(std::ofstream& output_file, std::string command);
 
 int main(){
 
-    std::string filename = "StackTest"; 
+    std::string filename = "StaticTest"; 
     //std::cin >> filename; // "BasicTest.vm"
 
     std::ifstream input_file(filename + ".vm");
@@ -35,7 +35,7 @@ int main(){
             int index;
             input_file >> index;
 
-            write_push_pop(output_file, input, segment_type, index);
+            write_push_pop(output_file, filename, input, segment_type, index);
         }
         else if(input == "add" || input == "sub" || input == "neg" ||
                 input == "eq"  || input == "gt"  || input == "lt"  ||
@@ -51,16 +51,32 @@ int main(){
     return 0;
 }
 
-void write_push_pop(std::ofstream& output_file, std::string command, std::string segment_type, int index){
+void write_push_pop(std::ofstream& output_file, std::string filename, std::string command, std::string segment_type, int index){
 
     // commment
     output_file << "// " << command << " " << segment_type << " " << index << "\n";
 
     if(command == "push"){
-
+        // Find Register Value
         if(segment_type == "constant"){
             output_file << "@" << index << "\n";
             output_file << "D=A\n";
+        }
+        else if(segment_type == "pointer"){
+            switch (index){
+            case 0: // pointer 0 : THIS
+                output_file << "@THIS\n";
+                output_file << "D=M\n";
+                break;
+            case 1: // pointer 0 : THAT
+                output_file << "@THAT\n";
+                output_file << "D=M\n";
+                break;
+            }
+        }
+        else if(segment_type == "static"){
+            output_file << "@" << filename << "." << index << "\n";
+            output_file << "D=M\n";
         }
         else if(segment_type == "temp"){
             output_file << "@5\n";
@@ -70,9 +86,8 @@ void write_push_pop(std::ofstream& output_file, std::string command, std::string
             output_file << "D=M\n";
         }
         else{
-            // Find Register
             output_file << "@" << memory_segment[segment_type] << "\n";
-            output_file << "D=A\n";
+            output_file << "D=M\n";
             output_file << "@" << index << "\n";
             output_file << "A=D+A\n";
             output_file << "D=M\n";
@@ -87,9 +102,20 @@ void write_push_pop(std::ofstream& output_file, std::string command, std::string
     }
     else if(command == "pop"){
         // Store memory segment address
-        output_file << "@" << memory_segment[segment_type] << "\n";
-        output_file << "D=M\n";
-        output_file << "@" << index << "\n";
+        if(segment_type == "pointer"){
+            output_file << (index == 0 ? "@THIS\n" : "@THAT\n");
+            output_file << "D=A\n";
+        }
+        else if(segment_type == "static"){
+            output_file << "@" << filename << "." << index << "\n";
+            output_file << "D=A\n";
+        }
+        else{
+            output_file << "@" << memory_segment[segment_type] << "\n";
+            output_file << "D=M\n";
+            output_file << "@" << index << "\n";
+            output_file << "D=D+A\n";
+        }
         output_file << "@R13\n";
         output_file << "M=D\n";
 
