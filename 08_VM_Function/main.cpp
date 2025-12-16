@@ -4,16 +4,20 @@
 #include <string>
 
 int main(int argc, char* argv[]){
-    if(argc < 2){
-        std::cerr << "Usage: ./VMT <filename1.vm> <filename2.vm> ...\n";
+    if(argc < 3){
+        std::cerr << "Usage: ./VMT <asmname.asm> <filename1.vm> <filename2.vm> ...\n";
         return 1;
     }
 
-    for(size_t i=1; i<argc; i++){
-        std::string filename = argv[i];
+    CodeWriter code_writer(argv[1]);
 
-        Parser parser(filename);
-        CodeWriter code_writer(filename);
+    if(argc > 3)
+        code_writer.bootstrap();
+
+
+    for(size_t i=2; i<argc; i++){
+        code_writer.set_file_name(argv[i]);
+        Parser parser(argv[i]); // vm files
 
         while(parser.advance()){
             CommandType command = parser.get_command_type();
@@ -27,6 +31,24 @@ int main(int argc, char* argv[]){
                 break;
             case C_ARITHMETIC:
                 code_writer.write_arithmetic(parser.arg1);
+                break;
+            case C_LABEL:
+                code_writer.write_label(parser.arg1);
+                break;
+            case C_GOTO:
+                code_writer.write_goto(parser.arg1);
+                break;
+            case C_IF:
+                code_writer.write_if(parser.arg1);
+                break;
+            case C_FUNCTION:
+                code_writer.write_function(parser.arg1, parser.arg2);
+                break;
+            case C_RETURN:
+                code_writer.write_return();
+                break;
+            case C_CALL:
+                code_writer.write_call(parser.arg1, parser.arg2);
                 break;
             }
         }

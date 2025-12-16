@@ -1,10 +1,7 @@
 #include "CodeWriter.h"
 
-CodeWriter::CodeWriter(std::string filename) {
-    size_t dot_pos = filename.find_last_of(".");
-    raw_name = filename.substr(0, dot_pos);
-    this->filename = raw_name + ".asm";
-    output.open(this->filename);
+CodeWriter::CodeWriter(std::string filename) : current_function_name(""), label_count(0), ret_count(0) {
+    output.open(filename + ".asm");
 
     segment_asm = {
         {"local", "LCL"},
@@ -18,13 +15,37 @@ CodeWriter::CodeWriter(std::string filename) {
         {"gt", "JGT"},
         {"lt", "JLT"}  
     };
-
-    label_count = 0;
 }
+
+void CodeWriter::close(){
+    output.close();
+}
+
+void CodeWriter::set_file_name(std::string vm_name){
+    size_t dot_pos = vm_name.find(".");
+    raw_name = vm_name.substr(0, dot_pos);
+}
+
+std::string CodeWriter::get_full_label(std::string label){
+    if(current_function_name.empty())
+        return raw_name + "." + label;
+    else
+        return current_function_name + "$" + label;
+}
+
+void CodeWriter::push_D(){
+    output << "@SP\n";
+    output << "A=M\n";
+    output << "M=D\n";
+    output << "@SP\n";
+    output << "M=M+1\n";
+}
+
+//      ==================================public==================================
 
 void CodeWriter::write_pushpop(CommandType command, std::string segment, int index){
     // add comment
-    output << "// " << command << " " << segment << " " << index << "\n";
+    output << "// " << (command == C_PUSH ? "push " : "pop ") << segment << " " << index << "\n";
 
     switch(command){
     case C_PUSH:
@@ -106,8 +127,7 @@ void CodeWriter::write_pushpop(CommandType command, std::string segment, int ind
 }
 
 void CodeWriter::write_arithmetic(std::string command){
-    // comment
-    output << "// " << command << "\n";
+    output << "// " << command << "\n"; // comment
 
     if(command == "neg" || command == "not"){ // Need one item from stack
         output << "@SP\n";
@@ -167,4 +187,165 @@ void CodeWriter::write_arithmetic(std::string command){
         output << "@SP\n";
         output << "M=M+1\n";
     }
+}
+
+void CodeWriter::write_label(std::string label){
+    output << "// label " << label << "\n"; // comment
+    output << "(" << get_full_label(label) << ")\n";
+}
+
+void CodeWriter::write_goto(std::string label){
+    output << "// goto " << label << "\n"; // comment
+    output << "@" << get_full_label(label) << "\n";
+    output << "0;JMP\n";
+}
+
+void CodeWriter::write_if(std::string label){
+    output << "// if-goto " << label << "\n"; // comment
+
+    // get top of stack
+    output << "@SP\n";
+    output << "AM=M-1\n";
+    output << "D=M\n";
+
+    // if top of stack != 0, goto
+    output << "@" << get_full_label(label) << "\n";
+    output << "D;JNE\n";
+}
+
+void CodeWriter::write_call(std::string function_name, int num_of_args){
+    output << "// call " << function_name << " " << num_of_args << "\n"; // comment
+
+    // save return address
+    output << "@" << get_full_label("ret") << "." << ret_count << "\n";
+    output << "D=A\n";
+    push_D();
+
+    // push LCL
+    output << "@LCL\n";
+    output << "D=M\n";
+    push_D();
+
+    // push ARG
+    output << "@ARG\n";
+    output << "D=M\n";
+    push_D();
+
+    // push THIS
+    output << "@THIS\n";
+    output << "D=M\n";
+    push_D();
+
+    // push THAT
+    output << "@THAT\n";
+    output << "D=M\n";
+    push_D();
+
+    // ARG = *SP - 5 - num_of_args
+    output << "@SP\n";
+    output << "D=M\n";
+    output << "@5\n";
+    output << "D=D-A\n";
+    output << "@" << num_of_args << "\n";
+    output << "D=D-A\n";
+    output << "@ARG\n";
+    output << "M=D\n";
+
+    // LCL = SP
+    output << "@SP\n";
+    output << "D=M\n";
+    output << "@LCL\n";
+    output << "M=D\n";
+
+    // goto function_name
+    output << "@" << function_name <<"\n";
+    output << "0;JMP\n";
+
+    // set return labela
+    output << "(" << get_full_label("ret") << "." << ret_count++ << ")\n"; 
+}
+
+void CodeWriter::write_function(std::string function_name, int num_of_vars){
+    output << "// function " << function_name << " " << num_of_vars << "\n"; // comment
+
+    // Inject an entry point label
+    output << "("  << function_name << ")\n";
+
+    // Initialize the local segment
+    output << "D=0\n";
+    for(size_t i = 0; i < num_of_vars; i++)
+        push_D(); // LCL = SP when function is called
+}
+
+void CodeWriter::write_return(){
+    output << "// return\n"; // comment
+
+    // save end_frame at R13
+    output << "@LCL\n";
+    output << "D=M\n";
+    output << "@R13\n";
+    output << "M=D\n";
+
+    // save return address at R14
+    output << "@5\n";
+    output << "A=D-A\n";
+    output << "D=M\n";
+    output << "@R14\n";
+    output << "M=D\n";
+
+    // set return value at ARG 0
+    output << "@SP\n";
+    output << "AM=M-1\n";
+    output << "D=M\n";
+    output << "@ARG\n";
+    output << "A=M\n";
+    output << "M=D\n";
+
+    // set SP to ARG + 1
+    output << "@ARG\n";
+    output << "D=M\n";
+    output << "@SP\n";
+    output << "M=D+1\n";
+
+    // set THAT to end_frame(R13) - 1
+    output << "@R13\n";
+    output << "AM=M-1\n";
+    output << "D=M\n";
+    output << "@THAT\n";
+    output << "M=D\n";
+
+    // set THIS to end_frame - 2
+    output << "@R13\n";
+    output << "AM=M-1\n";
+    output << "D=M\n";
+    output << "@THIS\n";
+    output << "M=D\n";
+
+    // set ARG to end_frame - 3
+    output << "@R13\n";
+    output << "AM=M-1\n";
+    output << "D=M\n";
+    output << "@ARG\n";
+    output << "M=D\n";
+
+    // set LCL to end_frame - 4
+    output << "@R13\n";
+    output << "AM=M-1\n";
+    output << "D=M\n";
+    output << "@LCL\n";
+    output << "M=D\n";
+
+    // goto return address
+    output << "@R14\n";
+    output << "A=M\n";
+    output << "0;JMP\n";
+}
+
+void CodeWriter::bootstrap(){
+    output << "@256\n";
+    output << "D=A\n";
+    output << "@SP\n";
+    output << "M=D\n";
+    raw_name = "bootstrap";
+    write_call("Sys.init", 0);
 }

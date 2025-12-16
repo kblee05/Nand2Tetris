@@ -10,7 +10,6 @@ class Parser{
 private:
     std::string filename;
     std::ifstream input;
-    std::string current_command;
 
     std::string clean_line(std::string line);
     void parse(std::string cleaned_line);

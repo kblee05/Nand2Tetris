@@ -10,7 +10,7 @@ std::string Parser::clean_line(std::string line){
     if(comment_pos != std::string::npos)
         line = line.substr(0, comment_pos);
 
-    const std::string WHITE_SPACE = "\n\r\t\f\v";
+    const std::string WHITE_SPACE = " \n\r\t\f\v";
 
     size_t end_pos = line.find_last_not_of(WHITE_SPACE);
     if(end_pos == std::string::npos) // empty line
@@ -33,7 +33,6 @@ bool Parser::advance(){
         if(cleaned_line.empty())
             continue;
 
-        current_command = cleaned_line;
         parse(cleaned_line);
         return true;
     }
@@ -53,7 +52,7 @@ CommandType Parser::get_command_type(){
 }
 
 void Parser::parse(std::string cleaned_line){
-    std::stringstream ss(current_command);
+    std::stringstream ss(cleaned_line);
     ss >> arg0;
 
     if(get_command_type() == C_ARITHMETIC){
