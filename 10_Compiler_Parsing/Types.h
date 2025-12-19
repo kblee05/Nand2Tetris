@@ -11,7 +11,7 @@ enum TokenType{
     STRING_CONST
 };
 
-enum Keyword{
+enum KeywordType{
     CLASS,
     METHOD,
     FUNCTION,

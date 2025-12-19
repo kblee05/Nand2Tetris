@@ -6,20 +6,25 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
-#include <cstdlib>
+#include <stdexcept>
 
 class JackTokenizer{
-    std::string current_token;
+private:
     std::string raw_code;
     int current_index;
-    std::ifstream input;
+    std::ifstream& input;
+    KeywordType keyword_type;
     void skip_whitespace();
     bool is_symbol();
     bool is_integer();
+    void set_keyword_type();
+    
 public:
+    std::string current_token;
     TokenType token_type;
-    JackTokenizer(std::string filename);
+    JackTokenizer(std::ifstream& ifstream);
     bool advance();
+    KeywordType get_keyword_type();
     char get_symbol();
     std::string get_identifier();
     int get_int_val();
