@@ -1,6 +1,8 @@
 #ifndef TYPES_H
 #define TYPES_h
 
+#include <set>
+
 enum TokenType{
     KEYWORD,
     SYMBOL,
@@ -29,8 +31,12 @@ enum Keyword{
     RETURN,
     TRUE,
     FALSE,
-    NULL,
+    _NULL,
     THIS
 };
+
+const std::set<std::string> KEYWORDS = { "class", "constructor", "function", "method", "field", "static",
+                                         "var", "int", "char", "boolean", "void", "true", "false", "null",
+                                         "this", "let", "do", "if", "else", "while", "return" };
 
 #endif

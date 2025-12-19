@@ -4,18 +4,22 @@
 #include "Types.h"
 #include <string>
 #include <fstream>
-#include <set>
+#include <sstream>
+#include <iostream>
+#include <cstdlib>
 
 class JackTokenizer{
     std::string current_token;
+    std::string raw_code;
+    int current_index;
     std::ifstream input;
     void skip_whitespace();
-    bool is_symbol(char c);
-    bool is_integer(char c);
+    bool is_symbol();
+    bool is_integer();
 public:
+    TokenType token_type;
     JackTokenizer(std::string filename);
     bool advance();
-    TokenType get_token_type();
     char get_symbol();
     std::string get_identifier();
     int get_int_val();
