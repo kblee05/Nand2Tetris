@@ -1,29 +1,31 @@
 #include "JackAnalyzer.h"
+#include "CompilationEngine.h"
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 
-// ===============================private==============================
+namespace fs = std::filesystem;
 
+void JackAnalyzer::analyze(std::string filename){
+    fs::path input_path(filename);
+    fs::path output_path = input_path;
+    output_path.replace_extension(".xml");
 
+    std::ifstream input(input_path);
+    std::ofstream output(output_path);
 
-// ===============================public===============================
+    if(!input.is_open() || !output.is_open()){
+        std::cerr << "Error opening file: " << filename << "\n";
+        return;
+    }
 
-void JackAnalyzer::set_file(std::string filename){
-    input.open(filename);
-    size_t end_pos = filename.find(".");
-    std::string raw_name = filename.substr(0, end_pos - 1);
-}
-
-void JackAnalyzer::analyze(){
     JackTokenizer tokenizer(input);
     CompilationEngine compilation_engine(output, tokenizer);
 
-    output << "<tokens>\n";
+    //output << "<tokens>\n";
 
-    while(tokenizer.advance()){
-        switch(tokenizer.token_type){
-            
-        }
-    }
+    if(tokenizer.advance())
+        compilation_engine.compile_class();
 
-    input.close();
-    output.close();
+    //output << "</tokens>\n";
 }

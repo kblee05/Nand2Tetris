@@ -1,0 +1,15 @@
+TextComparer.bat
+
+TextComparer.bat:Zone.Identifier
+
+*.o
+
+ArrayTest/
+
+ExpressionlessSquare/
+
+Square/
+
+.vscode/
+
+Analyzer

@@ -2,6 +2,7 @@
 #define TYPES_h
 
 #include <set>
+#include <string>
 
 enum TokenType{
     KEYWORD,

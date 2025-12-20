@@ -4,9 +4,6 @@
 #include "Types.h"
 #include <string>
 #include <fstream>
-#include <sstream>
-#include <iostream>
-#include <stdexcept>
 
 class JackTokenizer{
 private:

@@ -1,11 +1,41 @@
 #include "JackTokenizer.h"
+#include <sstream>
+#include <iostream>
+#include <stdexcept>
+#include <cctype>
 
 // ===============================private==============================
 
 void JackTokenizer::skip_whitespace(){
-    static const std::string WHITE_SPACE = " \n\r\t\f\v";
-    while(current_index < raw_code.length() && WHITE_SPACE.find(raw_code[current_index]) != std::string::npos)
-        current_index++;
+    while(current_index < raw_code.length()){
+        char c = raw_code[current_index];
+
+        if(std::isspace(c)){
+            current_index++;
+            continue;
+        }
+
+        if(raw_code[current_index] == '/' && current_index + 1 < raw_code.length()){
+            if(raw_code[current_index + 1] == '*'){
+                size_t end_pos = raw_code.find("*/", current_index + 2);
+
+                if(end_pos == std::string::npos)
+                    std::cerr << "Comment block unclosed\n";
+
+                current_index = end_pos + 2;
+                continue;
+            }
+            else if(raw_code[current_index + 1] == '/'){
+                size_t end_pos = raw_code.find('\n', current_index + 2);
+                current_index = end_pos + 1;
+                continue;
+            }
+            else // division operator
+                return;
+        }
+
+        return;
+    }
 }
 
 bool JackTokenizer::is_symbol(){
@@ -47,7 +77,7 @@ void JackTokenizer::set_keyword_type(){
 JackTokenizer::JackTokenizer(std::ifstream& ifstream) : input(ifstream), current_index(0) {
     std::stringstream buffer;
     buffer << input.rdbuf();
-    std::string raw_code = buffer.str();
+    raw_code = buffer.str();
 }
 
 bool JackTokenizer::advance(){
@@ -56,27 +86,7 @@ bool JackTokenizer::advance(){
 
     skip_whitespace();
 
-    current_token = "";
-
-    if(raw_code[current_index] == '/'){
-        if(raw_code[current_index + 1] == '*'){
-            size_t end_pos = raw_code.find("*/", current_index + 2);
-
-            if(end_pos == std::string::npos)
-                std::cerr << "Comment block unclosed\n";
-
-            current_index = end_pos + 2;
-        }
-        else if(raw_code[current_index + 1] == '/'){
-            size_t end_pos = raw_code.find('\n', current_index + 2);
-            current_index = end_pos + 1;
-        }
-        else{ // Divide operator
-            current_token = raw_code[current_index++];
-            token_type = SYMBOL;
-        }
-    }
-    else if(is_symbol()){
+    if(is_symbol()){
         current_token = raw_code[current_index++];
         token_type = SYMBOL;
         return true;
@@ -94,7 +104,7 @@ bool JackTokenizer::advance(){
         token_type = STRING_CONST;
     }
     else{ // keyword or identifier
-        size_t end_pos = raw_code.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_");
+        size_t end_pos = raw_code.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_", current_index + 1);
         current_token = raw_code.substr(current_index, end_pos - current_index);
         current_index = end_pos;
 

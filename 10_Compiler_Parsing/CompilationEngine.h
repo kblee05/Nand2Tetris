@@ -12,7 +12,7 @@ private:
     void eat(std::string expected_token);
     void eat_identifier();
     void print_xml(std::string tag, std::string body);
-    void print_xml(std::string tag, bool is_start);
+    void print_structure(std::string tag, bool is_start);
     void compile_type();
 public:
     CompilationEngine(std::ofstream& ofstream, JackTokenizer& tokenizer);
