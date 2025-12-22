@@ -48,7 +48,7 @@ void VMWriter::write_label(std::string label){
 }
 
 void VMWriter::write_goto(std::string label){
-    output << "\ttgoto " << label << "\n";
+    output << "\tgoto " << label << "\n";
 }
 
 void VMWriter::write_if(std::string label){

@@ -1,4 +1,5 @@
 #include "CompilationEngine.h"
+#include <iostream>
 
 // ===============================private==============================
 
@@ -10,60 +11,30 @@ void CompilationEngine::eat(std::string expected_token){
     throw std::runtime_error("Current token: " + tokenizer.current_token + " does not match " + expected_token + "\n");
 }
 
-void CompilationEngine::eat_identifier(){
+std::string CompilationEngine::eat_identifier(){
     if(tokenizer.token_type == IDENTIFIER){
+        std::string token = tokenizer.current_token;
         tokenizer.advance();
-        return;
+        return token;
     }
     throw std::runtime_error("Current token: " + tokenizer.current_token + " is not an IDENTIFIER\n");
 }
 
-void CompilationEngine::print_xml(std::string tag, std::string body){
-    for(int i=0; i<identation_level; i++)
-        output << "  ";
-
-    if(body == "<")
-        output << "<" << tag << "> &lt; </" << tag << ">\n";
-    else if(body == ">")
-        output << "<" << tag << "> &gt; </" << tag << ">\n";
-    else if(body == "\"")
-        output << "<" << tag << "> &quot; </" << tag << ">\n";
-    else if(body == "&")
-        output << "<" << tag << "> &amp; </" << tag << ">\n";
-    else
-        output << "<" << tag << "> " << body << " </" << tag << ">\n"; 
-}
-
-void CompilationEngine::print_structure(std::string tag, bool is_start){
-    if(is_start){ // start of identation
-        for(int i=0; i<identation_level; i++)
-            output << "  ";
-        output << "<" << tag << ">\n";
-        identation_level++;
-    }
-    else{ // end of identation
-        identation_level--;
-        for(int i=0; i<identation_level; i++)
-            output << "  ";
-        output << "</" << tag << ">\n";
-    }
-}
-
-void CompilationEngine::compile_type(){
+std::string CompilationEngine::eat_type(){
     if(tokenizer.current_token == "int" ||
        tokenizer.current_token == "char" ||
        tokenizer.current_token == "boolean")
     {
-        print_xml("keyword", tokenizer.current_token);
+        std::string token = tokenizer.current_token;
         tokenizer.advance();
+        return token;
     }
     else{
-        print_xml("identifier", tokenizer.current_token);
-        eat_identifier();
+        return eat_identifier();
     }
 }
 
-VMWriter::Segment kind_to_segment(SymbolTable::Kind kind){
+VMWriter::Segment CompilationEngine::kind_to_segment(SymbolTable::Kind kind){
     switch (kind){
     case SymbolTable::Kind::VAR:
         return VMWriter::Segment::LOCAL;
@@ -80,20 +51,19 @@ VMWriter::Segment kind_to_segment(SymbolTable::Kind kind){
 
 // ===============================public===============================
 
-CompilationEngine::CompilationEngine(std::ofstream& ofstream, JackTokenizer& tokenizer) : output(ofstream), identation_level(0), tokenizer(tokenizer) {
-    
+CompilationEngine::CompilationEngine(std::ofstream& ofstream, JackTokenizer& tokenizer) : 
+    identation_level(0),
+    tokenizer(tokenizer),
+    symbol_table(),
+    vmwriter(ofstream),
+    label_count(0) {
 }
 
 void CompilationEngine::compile_class(){
-    print_structure("class", 1);
-
-    print_xml("keyword", "class");
     eat("class");
 
-    print_xml("identifier", tokenizer.current_token);
-    tokenizer.advance();
+    current_class_name = eat_identifier();
 
-    print_xml("symbol", "{");
     eat("{");
 
     while(tokenizer.current_token == "field" || tokenizer.current_token == "static")
@@ -104,134 +74,109 @@ void CompilationEngine::compile_class(){
           tokenizer.current_token == "method")
         compile_subroutine();
 
-    print_xml("symbol", "}");
     eat("}");
-
-    print_structure("class", 0);
 }
 
 void CompilationEngine::compile_class_var_dec(){
-    print_structure("classVarDec", true);
-
-    print_xml("keyword", tokenizer.current_token);
-    tokenizer.advance();
-
-    compile_type();
-
-    print_xml("identifier", tokenizer.current_token);
-    eat_identifier();
+    SymbolTable::Kind kind = tokenizer.current_token == "field" ? SymbolTable::Kind::FIELD : SymbolTable::Kind::STATIC;
+    tokenizer.advance(); // eat field or static
+    std::string type = eat_type();
+    std::string name = eat_identifier();
+    symbol_table.define(name, type, kind);
 
     while(tokenizer.current_token == ","){
-        print_xml("symbol", ",");
         eat(",");
-
-        print_xml("identifier", tokenizer.current_token);
-        eat_identifier();
+        name = eat_identifier();
+        symbol_table.define(name, type, kind);
     }
 
-    print_xml("symbol", ";");
     eat(";");
-
-    print_structure("classVarDec", false);
 }
 
 void CompilationEngine::compile_subroutine(){
-    print_structure("subroutineDec", 1);
+    symbol_table.reset();
 
-    print_xml("keyword", tokenizer.current_token); // constructor function method
-    tokenizer.advance();
+    current_subroutine_type = tokenizer.current_token;
+    tokenizer.advance(); // eat constructor function method
 
     if(tokenizer.current_token == "void"){
-        print_xml("keyword", "void");
         tokenizer.advance();
     }
-    else
-        compile_type();
+    else    
+        eat_type();
 
-    print_xml("identifier", tokenizer.current_token);
-    eat_identifier();
-
-    print_xml("symbol", "(");
+    current_subroutine_name = current_class_name + "." + eat_identifier();
+    
     eat("(");
 
     compile_parameter_list();
 
-    print_xml("symbol", ")");
     eat(")");
-
+    
     compile_subroutine_body();
-
-    print_structure("subroutineDec", 0);
 }
 
 void CompilationEngine::compile_parameter_list(){
-    print_structure("parameterList", 1);
+    std::string name, type;
 
     if(tokenizer.current_token != ")"){
-        compile_type();
-
-        print_xml("identifier", tokenizer.current_token);
-        eat_identifier();
+        type = eat_type();
+        name = eat_identifier();
+        symbol_table.define(name, type, SymbolTable::Kind::ARG);
     }
 
     while(tokenizer.current_token == ","){
-        print_xml("symbol", ",");
         eat(",");
 
-        compile_type();
-
-        print_xml("identifier", tokenizer.current_token);
-        eat_identifier();
+        type = eat_type();
+        name = eat_identifier();
+        symbol_table.define(name, type, SymbolTable::Kind::ARG);
     }
-
-    print_structure("parameterList", 0);
 }
 
 void CompilationEngine::compile_subroutine_body(){
-    print_structure("subroutineBody", 1);
-
-    print_xml("symbol", "{");
     eat("{");
 
     while(tokenizer.current_token == "var")
         compile_var_dec();
+    
+    int num_of_locals = symbol_table.get_var_count(SymbolTable::Kind::VAR);
+    vmwriter.write_function(current_subroutine_name, num_of_locals);
+
+    if(current_subroutine_type == "constructor"){
+        int num_of_field = symbol_table.get_var_count(SymbolTable::Kind::FIELD);
+        vmwriter.write_push(VMWriter::Segment::CONST, num_of_field);
+        vmwriter.write_call("Memory.alloc", 1);
+        vmwriter.write_pop(VMWriter::Segment::POINTER, 0);
+    }
+    else if(current_subroutine_type == "method"){
+        vmwriter.write_push(VMWriter::Segment::ARG, 0);
+        vmwriter.write_pop(VMWriter::Segment::POINTER, 0);
+    }
 
     compile_statements();
 
-    print_xml("symbol", "}");
     eat("}");
-
-    print_structure("subroutineBody", 0);
 }
 
 void CompilationEngine::compile_var_dec(){
-    print_structure("varDec", 1);
-
-    print_xml("keyword", "var");
     eat("var");
 
-    compile_type();
-
-    print_xml("identifier", tokenizer.current_token);
-    eat_identifier();
+    std::string type = eat_type();
+    std::string name = eat_identifier();
+    symbol_table.define(name, type, SymbolTable::Kind::VAR);
 
     while(tokenizer.current_token == ","){
-        print_xml("symbol", ",");
         eat(",");
 
-        print_xml("identifier", tokenizer.current_token);
-        eat_identifier();
+        name = eat_identifier();
+        symbol_table.define(name, type, SymbolTable::Kind::VAR);
     }
 
-    print_xml("symbol", ";");
     eat(";");
-
-    print_structure("varDec", 0);
 }
 
 void CompilationEngine::compile_statements(){
-    print_structure("statements", 1);
-
     while(tokenizer.token_type == KEYWORD){
         if(tokenizer.current_token == "let")
             compile_let();
@@ -246,251 +191,309 @@ void CompilationEngine::compile_statements(){
         else
             return;
     }
-
-    print_structure("statements", 0);
 }
 
 void CompilationEngine::compile_let(){
-    print_structure("letStatement", 1);
-
-    print_xml("keyword", "let");
     eat("let");
 
-    print_xml("identifier", tokenizer.current_token);
-    eat_identifier();
+    std::string name = eat_identifier();
+    SymbolTable::Kind kind = symbol_table.get_kind(name);
+    int index = symbol_table.get_index(name);
 
-    if(tokenizer.current_token == "["){
-        print_xml("symbol", "[");
-        tokenizer.advance();
+    if(tokenizer.current_token == "["){ // Array
+        eat("[");
+        compile_expression(); // push 'i' ( a[i] )
+        eat("]");
+
+        vmwriter.write_push(kind_to_segment(kind), index);
+        
+        vmwriter.write_arithmetic(VMWriter::Command::ADD); // push a + i
+
+        eat("=");
+
+        compile_expression(); // push b[i]
+
+        vmwriter.write_pop(VMWriter::Segment::TEMP, 0); // save result of expression at temp 0
+        vmwriter.write_pop(VMWriter::Segment::POINTER, 1); // pop a + i to that
+        vmwriter.write_push(VMWriter::Segment::TEMP, 0);
+        vmwriter.write_pop(VMWriter::Segment::THAT, 0);
+    }
+    else{ // normal variable
+        eat("=");
 
         compile_expression();
 
-        print_xml("symbol", "]");
-        eat("]");
+        vmwriter.write_pop(kind_to_segment(kind), index);
     }
 
-    print_xml("symbol", "=");
-    eat("=");
-
-    compile_expression();
-
-    print_xml("symbol", ";");
     eat(";");
-
-    print_structure("letStatement", 0);
 }
 
 void CompilationEngine::compile_if(){
-    print_structure("ifStatement", 1);
+    std::string label_end = current_class_name + "_" + std::to_string(label_count++);
+    std::string label_false = current_class_name + "_" + std::to_string(label_count++);
 
-    print_xml("keyword", "if");
     eat("if");
 
-    print_xml("symbol", "(");
     eat("(");
-
-    compile_expression();
-
-    print_xml("symbol", ")");
+    compile_expression(); // top of stack is the result of if-condition
     eat(")");
+    vmwriter.write_arithmetic(VMWriter::Command::NOT);
+    vmwriter.write_if(label_false);
 
-    print_xml("symbol", "{");
     eat("{");
-
     compile_statements();
-
-    print_xml("symbol", "}");
     eat("}");
+    vmwriter.write_goto(label_end);
 
+    vmwriter.write_label(label_false);
     if(tokenizer.current_token == "else"){
-        print_xml("keyword", "else");
-        tokenizer.advance();
-
-        print_xml("symbol", "{");
+        eat("else");
         eat("{");
-
         compile_statements();
-
-        print_xml("symbol", "}");
         eat("}");
     }
 
-    print_structure("ifStatement", 0);
+    vmwriter.write_label(label_end);
 }
 
 void CompilationEngine::compile_while(){
-    print_structure("whileStatement", 1);
+    std::string label_cond = current_class_name + "_" + std::to_string(label_count++);
+    std::string label_end = current_class_name + "_" + std::to_string(label_count++);
 
-    print_xml("keyword", "while");
     eat("while");
 
-    print_xml("symbol", "(");
+    vmwriter.write_label(label_cond);
     eat("(");
-
     compile_expression();
-
-    print_xml("symbol", ")");
     eat(")");
+    vmwriter.write_arithmetic(VMWriter::Command::NOT);
+    vmwriter.write_if(label_end);
 
-    print_xml("symbol", "{");
     eat("{");
-
     compile_statements();
-
-    print_xml("symbol", "}");
     eat("}");
 
-    print_structure("whileStatement", 0);
+    vmwriter.write_goto(label_cond);
+    vmwriter.write_label(label_end);
 }
 
 void CompilationEngine::compile_do(){
-    print_structure("doStatement", 1);
-
-    print_xml("keyword", "do");
     eat("do");
 
-    print_xml("identifier", tokenizer.current_token);
-    eat_identifier();
+    std::string name = eat_identifier();
 
-    if(tokenizer.current_token == "."){
-        print_xml("symbol", ".");
-        tokenizer.advance();
+    if(tokenizer.current_token == "."){ // var.subroutine()
+        eat(".");
+        std::string subroutine_name = eat_identifier();
 
-        print_xml("identifier", tokenizer.current_token);
-        eat_identifier();
+        int num_of_args = 0;
+        std::string type;
+
+        if(symbol_table.exists(name)){ // method of a variable
+            SymbolTable::Kind kind = symbol_table.get_kind(name);
+            int index = symbol_table.get_index(name);
+            vmwriter.write_push(kind_to_segment(kind), index);
+            num_of_args++;
+            type = symbol_table.get_type(name);
+        }
+        else{ // static method ( function )
+            type = name;
+        }
+
+        eat("(");
+        num_of_args += compile_expression_list(); // push args
+        eat(")");
+
+        vmwriter.write_call(type + "." + subroutine_name, num_of_args);
+        vmwriter.write_pop(VMWriter::Segment::TEMP, 0);
+    }
+    else{ // method
+        vmwriter.write_push(VMWriter::Segment::POINTER, 0); // push this
+
+        eat("(");
+        int num_of_args = compile_expression_list(); // push args
+        eat(")");
+
+        vmwriter.write_call(current_class_name + "." + name, num_of_args + 1);
+        vmwriter.write_pop(VMWriter::Segment::TEMP, 0);
     }
 
-    print_xml("symbol", "(");
-    eat("(");
-
-    compile_expression_list();
-
-    print_xml("symbol", ")");
-    eat(")");
-
-    print_xml("symbol", ";");
     eat(";");
-
-    print_structure("doStatement", 0);
 }
 
 void CompilationEngine::compile_return(){
-    print_structure("returnStatement", 1);
-
-    print_xml("keyword", "return");
     eat("return");
 
-    if(tokenizer.current_token != ";")
+    if(tokenizer.current_token != ";"){
         compile_expression();
+    }
+    else{
+        vmwriter.write_push(VMWriter::Segment::CONST, 0);
+    }
 
-    print_xml("symbol", ";");
+    vmwriter.write_return();
+    
     eat(";");
-
-    print_structure("returnStatement", 0);
 }
 
 void CompilationEngine::compile_expression(){
-    print_structure("expression", 1);
-
     compile_term();
 
-    static const std::string OPERATORS = "+-*/&|<>=";
+    static const std::string OPERATORS = "+-*/&|<>=";   
 
     while(OPERATORS.find(tokenizer.current_token) != std::string::npos){
-        print_xml("symbol", tokenizer.current_token);
+        char op = tokenizer.current_token[0];
         tokenizer.advance();
 
         compile_term();
-    }
 
-    print_structure("expression", 0);
+        switch (op){
+        case '+': vmwriter.write_arithmetic(VMWriter::Command::ADD); break;
+        case '-': vmwriter.write_arithmetic(VMWriter::Command::SUB); break;
+        case '*': vmwriter.write_call("Math.multiply", 2); break;
+        case '/': vmwriter.write_call("Math.divide", 2); break;
+        case '&': vmwriter.write_arithmetic(VMWriter::Command::AND); break;
+        case '|': vmwriter.write_arithmetic(VMWriter::Command::OR); break;
+        case '<': vmwriter.write_arithmetic(VMWriter::Command::LT); break;
+        case '>': vmwriter.write_arithmetic(VMWriter::Command::GT); break;
+        case '=': vmwriter.write_arithmetic(VMWriter::Command::EQ); break;
+        }
+    }
 }
 
 void CompilationEngine::compile_term(){
-    print_structure("term", 1);
-
-    switch (tokenizer.token_type)
-    {
+    switch (tokenizer.token_type){
     case INT_CONST:
-        print_xml("integerConstant", tokenizer.current_token);
+        vmwriter.write_push(VMWriter::Segment::CONST, tokenizer.get_int_val());
         tokenizer.advance();
         break;
-    case STRING_CONST:
-        print_xml("stringConstant", tokenizer.current_token.substr(1, tokenizer.current_token.length()- 2));
+    case STRING_CONST: {
+        std::string str = tokenizer.get_string_val();
+        int len = str.length();
+
+        vmwriter.write_push(VMWriter::Segment::CONST, len);
+        vmwriter.write_call("String.new", 1);
+
+        for(char c : str){
+            vmwriter.write_push(VMWriter::Segment::CONST, (int) c);
+            vmwriter.write_call("String.appendChar", 2);
+        }
+
         tokenizer.advance();
         break;
-    case IDENTIFIER:
-        print_xml("identifier", tokenizer.current_token);
-        eat_identifier();
+    }
+    case IDENTIFIER:{
+        std::string name = eat_identifier();
 
         if(tokenizer.current_token == "["){
-            print_xml("symbol", "[");
-            tokenizer.advance();
-
+            eat("[");
             compile_expression();
-
-            print_xml("symbol", "]");
             eat("]");
+
+            SymbolTable::Kind kind = symbol_table.get_kind(name);
+            int index = symbol_table.get_index(name);
+            vmwriter.write_push(kind_to_segment(kind), index);
+            vmwriter.write_arithmetic(VMWriter::Command::ADD);
+            vmwriter.write_pop(VMWriter::Segment::POINTER, 1);
+            vmwriter.write_push(VMWriter::Segment::THAT, 0);
         }
         else if(tokenizer.current_token == "(" || tokenizer.current_token == "."){
-            if(tokenizer.current_token == "."){
-                print_xml("symbol", ".");
-                tokenizer.advance();
+            if(tokenizer.current_token == "."){ // sub routine of diff variable
+                eat(".");
+                
+                std::string subroutine_name = eat_identifier();
 
-                print_xml("identifier", tokenizer.current_token);
-                eat_identifier();
+                eat("(");
+                int num_of_args = compile_expression_list();
+                eat(")");
+
+                if(symbol_table.exists(name)){ // method
+                    SymbolTable::Kind kind = symbol_table.get_kind(name);
+                    int index = symbol_table.get_index(name);
+                    vmwriter.write_push(kind_to_segment(kind), index);
+                    num_of_args++;
+                }
+                
+                vmwriter.write_call(name + "." + subroutine_name, num_of_args);
             }
+            else{ // method
+                eat("(");
+                int num_of_args = compile_expression_list();
+                eat(")");
 
-            print_xml("symbol", "(");
+                vmwriter.write_push(VMWriter::Segment::POINTER, 0);
+                vmwriter.write_call(name, num_of_args + 1);
+            }
+        }
+        else{ // normal variable
+            SymbolTable::Kind kind = symbol_table.get_kind(name);
+            int index = symbol_table.get_index(name);
+            vmwriter.write_push(kind_to_segment(kind), index);
+        }
+        break;
+    }
+    case SYMBOL:
+        if(tokenizer.current_token == "-"){
             tokenizer.advance();
-
-            compile_expression_list();
-
-            print_xml("symbol", ")");
+            compile_term();
+            vmwriter.write_arithmetic(VMWriter::Command::NEG);
+        }
+        else if(tokenizer.current_token == "~"){
+            tokenizer.advance();
+            compile_term();
+            vmwriter.write_arithmetic(VMWriter::Command::NOT);
+        }
+        else if(tokenizer.current_token == "("){ // expression
+            eat("(");
+            compile_expression();
             eat(")");
+        }
+        else{
+            throw std::runtime_error("Cannot compile term: " + tokenizer.current_token);
+        }
+        break;
+    case KEYWORD:
+        if(tokenizer.current_token == "true"){
+            eat("true");
+            vmwriter.write_push(VMWriter::Segment::CONST, 1);
+            vmwriter.write_arithmetic(VMWriter::Command::NEG);
+        }
+        else if(tokenizer.current_token == "false"){
+            eat("false");
+            vmwriter.write_push(VMWriter::Segment::CONST, 0);
+        }
+        else if(tokenizer.current_token == "null"){
+            eat("false");
+            vmwriter.write_push(VMWriter::Segment::CONST, 0);
+        }
+        else if(tokenizer.current_token == "this"){
+            eat("this");
+            vmwriter.write_push(VMWriter::Segment::POINTER, 0);
+        }
+        else{
+            throw std::runtime_error("Cannot compile term: " + tokenizer.current_token);
         }
         break;
     default:
-        if(tokenizer.current_token == "-" || tokenizer.current_token == "~"){ // unary operator
-            print_xml("symbol", tokenizer.current_token);
-            tokenizer.advance();
-            compile_term();
-        }
-        else if(tokenizer.current_token == "("){ // expression
-            print_xml("symbol", "(");
-            tokenizer.advance();
-
-            compile_expression();
-
-            print_xml("symbol", ")");
-            eat(")");
-        }
-        else if(tokenizer.current_token == "true" || // keyword constant: true false null this
-                tokenizer.current_token == "false" ||
-                tokenizer.current_token == "null" ||
-                tokenizer.current_token == "this")
-        {
-            print_xml("keyword", tokenizer.current_token);
-            tokenizer.advance();
-        }
+        throw std::runtime_error("Cannot compile term: " + tokenizer.current_token);
         break;
     }
-
-    print_structure("term", 0);
 }
 
-void CompilationEngine::compile_expression_list(){
-    print_structure("expressionList", 1);
+int CompilationEngine::compile_expression_list(){
+    int num_of_exp = 0;
 
-    if(tokenizer.current_token != ")")
+    if(tokenizer.current_token != ")"){
         compile_expression();
-
-    while(tokenizer.current_token == ","){
-        print_xml("symbol", ",");
-        tokenizer.advance();
-
-        compile_expression();
+        num_of_exp++;
     }
 
-    print_structure("expressionList", 0);
+    while(tokenizer.current_token == ","){
+        eat(",");
+        compile_expression();
+        num_of_exp++;
+    }
+
+    return num_of_exp;
 }

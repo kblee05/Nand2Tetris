@@ -33,6 +33,7 @@ public:
     Kind get_kind(std::string name);
     std::string get_type(std::string name);
     int get_index(std::string name);
+    bool exists(std::string name);
 };
 
 #endif

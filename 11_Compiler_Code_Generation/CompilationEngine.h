@@ -9,13 +9,16 @@
 class CompilationEngine{
 private:
     JackTokenizer& tokenizer;
-    std::ofstream& output;
+    SymbolTable symbol_table;
+    VMWriter vmwriter;
     int identation_level;
+    std::string current_class_name;
+    std::string current_subroutine_name;
+    std::string current_subroutine_type;
+    int label_count;
     void eat(std::string expected_token);
-    void eat_identifier();
-    void print_xml(std::string tag, std::string body);
-    void print_structure(std::string tag, bool is_start);
-    void compile_type();
+    std::string eat_identifier();
+    std::string eat_type();
     VMWriter::Segment kind_to_segment(SymbolTable::Kind kind);
 public:
     CompilationEngine(std::ofstream& ofstream, JackTokenizer& tokenizer);
@@ -33,7 +36,7 @@ public:
     void compile_return();
     void compile_expression();
     void compile_term();
-    void compile_expression_list();
+    int compile_expression_list();
 };
 
 #endif

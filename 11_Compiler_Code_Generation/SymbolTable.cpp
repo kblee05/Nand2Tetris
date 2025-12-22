@@ -27,7 +27,7 @@ void SymbolTable::reset(){
 }
 
 void SymbolTable::define(std::string name, std::string type, SymbolTable::Kind kind){
-    if(name == "STATIC" || name == "FIELD"){
+    if(kind == Kind::STATIC || kind == Kind::FIELD){
         class_table[name] = {type, kind, indices[kind]++};
     }
     else{ // name == ARG or VAR
@@ -49,4 +49,11 @@ std::string SymbolTable::get_type(std::string name){
 
 int SymbolTable::get_index(std::string name){
     return find_symbol_info(name).index;
+}
+
+bool SymbolTable::exists(std::string name){
+    if(subroutine_table.count(name) || class_table.count(name)){
+        return true;
+    }
+    return false;
 }
