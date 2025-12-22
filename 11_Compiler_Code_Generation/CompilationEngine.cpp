@@ -8,7 +8,7 @@ void CompilationEngine::eat(std::string expected_token){
         tokenizer.advance();
         return;
     }
-    throw std::runtime_error("Current token: " + tokenizer.current_token + " does not match " + expected_token + "\n");
+    error("Unexpected token for " + expected_token + ": " + tokenizer.current_token);
 }
 
 std::string CompilationEngine::eat_identifier(){
@@ -17,7 +17,7 @@ std::string CompilationEngine::eat_identifier(){
         tokenizer.advance();
         return token;
     }
-    throw std::runtime_error("Current token: " + tokenizer.current_token + " is not an IDENTIFIER\n");
+    error("Current token: " + tokenizer.current_token + " is not an IDENTIFIER\n");
 }
 
 std::string CompilationEngine::eat_type(){
@@ -45,8 +45,13 @@ VMWriter::Segment CompilationEngine::kind_to_segment(SymbolTable::Kind kind){
     case SymbolTable::Kind::STATIC:
         return VMWriter::Segment::STATIC;
     default:
-        throw std::runtime_error("Unkown kind of mapping ( SymbolTable kind to VMWriter)");
+        error("Unkown kind of mapping ( SymbolTable kind to VMWriter)");
     }
+}
+
+void CompilationEngine::error(std::string message){
+    print_stack_trace();
+    throw std::runtime_error(message);
 }
 
 // ===============================public===============================
@@ -450,7 +455,7 @@ void CompilationEngine::compile_term(){
             eat(")");
         }
         else{
-            throw std::runtime_error("Cannot compile term: " + tokenizer.current_token);
+            error("Cannot compile term: " + tokenizer.current_token);
         }
         break;
     case KEYWORD:
@@ -472,11 +477,11 @@ void CompilationEngine::compile_term(){
             vmwriter.write_push(VMWriter::Segment::POINTER, 0);
         }
         else{
-            throw std::runtime_error("Cannot compile term: " + tokenizer.current_token);
+            error("Cannot compile term: " + tokenizer.current_token);
         }
         break;
     default:
-        throw std::runtime_error("Cannot compile term: " + tokenizer.current_token);
+        error("Cannot compile term: " + tokenizer.current_token);
         break;
     }
 }
@@ -496,4 +501,11 @@ int CompilationEngine::compile_expression_list(){
     }
 
     return num_of_exp;
+}
+
+void CompilationEngine::print_stack_trace(){
+    for(const auto& func : call_stack){
+        std::cerr << "->" << func << "\n";
+    }
+    std::cerr << "-> Current token: " << tokenizer.current_token << "\n";
 }

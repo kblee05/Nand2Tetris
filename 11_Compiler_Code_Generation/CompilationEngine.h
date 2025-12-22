@@ -5,6 +5,8 @@
 #include "JackTokenizer.h"
 #include "SymbolTable.h"
 #include "VMWriter.h"
+#include <vector>
+#include <iostream>
 
 class CompilationEngine{
 private:
@@ -20,6 +22,19 @@ private:
     std::string eat_identifier();
     std::string eat_type();
     VMWriter::Segment kind_to_segment(SymbolTable::Kind kind);
+    std::vector<std::string> call_stack;
+    struct TraceGuard{
+        CompilationEngine& engine;
+        
+        TraceGuard(CompilationEngine& e, std::string function_name) : engine(e) {
+            engine.call_stack.push_back(function_name);
+        }
+
+        ~TraceGuard(){
+            engine.call_stack.pop_back();
+        }
+    };
+    void error(std::string message);
 public:
     CompilationEngine(std::ofstream& ofstream, JackTokenizer& tokenizer);
     void compile_class();
@@ -37,6 +52,7 @@ public:
     void compile_expression();
     void compile_term();
     int compile_expression_list();
+    void print_stack_trace();
 };
 
 #endif
