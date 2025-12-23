@@ -65,6 +65,8 @@ CompilationEngine::CompilationEngine(std::ofstream& ofstream, JackTokenizer& tok
 }
 
 void CompilationEngine::compile_class(){
+    TraceGuard trace_guard(*this, "compile_class");
+
     eat("class");
 
     current_class_name = eat_identifier();
@@ -83,6 +85,8 @@ void CompilationEngine::compile_class(){
 }
 
 void CompilationEngine::compile_class_var_dec(){
+    TraceGuard trace_guard(*this, "class_var_dec");
+
     SymbolTable::Kind kind = tokenizer.current_token == "field" ? SymbolTable::Kind::FIELD : SymbolTable::Kind::STATIC;
     tokenizer.advance(); // eat field or static
     std::string type = eat_type();
@@ -99,6 +103,8 @@ void CompilationEngine::compile_class_var_dec(){
 }
 
 void CompilationEngine::compile_subroutine(){
+    TraceGuard trace_guard(*this, "compile_subroutine");
+
     symbol_table.reset();
 
     current_subroutine_type = tokenizer.current_token;
@@ -107,8 +113,9 @@ void CompilationEngine::compile_subroutine(){
     if(tokenizer.current_token == "void"){
         tokenizer.advance();
     }
-    else    
+    else{
         eat_type();
+    }
 
     current_subroutine_name = current_class_name + "." + eat_identifier();
     
@@ -122,6 +129,12 @@ void CompilationEngine::compile_subroutine(){
 }
 
 void CompilationEngine::compile_parameter_list(){
+    TraceGuard trace_guard(*this, "compile_parameter_list");
+
+    if(current_subroutine_type == "method"){
+        symbol_table.define("$this", "pointer", SymbolTable::Kind::ARG);
+    }
+
     std::string name, type;
 
     if(tokenizer.current_token != ")"){
@@ -140,14 +153,17 @@ void CompilationEngine::compile_parameter_list(){
 }
 
 void CompilationEngine::compile_subroutine_body(){
+    TraceGuard trace_guard(*this, "compile_subroutine_Body");
+
     eat("{");
 
-    while(tokenizer.current_token == "var")
+    while(tokenizer.current_token == "var"){
         compile_var_dec();
+    }
     
     int num_of_locals = symbol_table.get_var_count(SymbolTable::Kind::VAR);
     vmwriter.write_function(current_subroutine_name, num_of_locals);
-
+    
     if(current_subroutine_type == "constructor"){
         int num_of_field = symbol_table.get_var_count(SymbolTable::Kind::FIELD);
         vmwriter.write_push(VMWriter::Segment::CONST, num_of_field);
@@ -165,6 +181,8 @@ void CompilationEngine::compile_subroutine_body(){
 }
 
 void CompilationEngine::compile_var_dec(){
+    TraceGuard trace_guard(*this, "compile_var_dec");
+
     eat("var");
 
     std::string type = eat_type();
@@ -182,6 +200,8 @@ void CompilationEngine::compile_var_dec(){
 }
 
 void CompilationEngine::compile_statements(){
+    TraceGuard trace_guard(*this, "compile_statements");
+
     while(tokenizer.token_type == KEYWORD){
         if(tokenizer.current_token == "let")
             compile_let();
@@ -199,6 +219,8 @@ void CompilationEngine::compile_statements(){
 }
 
 void CompilationEngine::compile_let(){
+    TraceGuard trace_guard(*this, "compile_let");
+
     eat("let");
 
     std::string name = eat_identifier();
@@ -235,6 +257,8 @@ void CompilationEngine::compile_let(){
 }
 
 void CompilationEngine::compile_if(){
+    TraceGuard trace_guard(*this, "compile_if");
+
     std::string label_end = current_class_name + "_" + std::to_string(label_count++);
     std::string label_false = current_class_name + "_" + std::to_string(label_count++);
 
@@ -263,6 +287,8 @@ void CompilationEngine::compile_if(){
 }
 
 void CompilationEngine::compile_while(){
+    TraceGuard trace_guard(*this, "compile_while");
+
     std::string label_cond = current_class_name + "_" + std::to_string(label_count++);
     std::string label_end = current_class_name + "_" + std::to_string(label_count++);
 
@@ -284,6 +310,8 @@ void CompilationEngine::compile_while(){
 }
 
 void CompilationEngine::compile_do(){
+    TraceGuard trace_guard(*this, "compile_do");
+
     eat("do");
 
     std::string name = eat_identifier();
@@ -313,7 +341,7 @@ void CompilationEngine::compile_do(){
         vmwriter.write_call(type + "." + subroutine_name, num_of_args);
         vmwriter.write_pop(VMWriter::Segment::TEMP, 0);
     }
-    else{ // method
+    else{ // this.method
         vmwriter.write_push(VMWriter::Segment::POINTER, 0); // push this
 
         eat("(");
@@ -328,6 +356,8 @@ void CompilationEngine::compile_do(){
 }
 
 void CompilationEngine::compile_return(){
+    TraceGuard trace_guard(*this, "compile_return");
+
     eat("return");
 
     if(tokenizer.current_token != ";"){
@@ -343,6 +373,8 @@ void CompilationEngine::compile_return(){
 }
 
 void CompilationEngine::compile_expression(){
+    TraceGuard trace_guard(*this, "compile_expression");
+
     compile_term();
 
     static const std::string OPERATORS = "+-*/&|<>=";   
@@ -368,6 +400,8 @@ void CompilationEngine::compile_expression(){
 }
 
 void CompilationEngine::compile_term(){
+    TraceGuard trace_guard(*this, "compile_term");
+
     switch (tokenizer.token_type){
     case INT_CONST:
         vmwriter.write_push(VMWriter::Segment::CONST, tokenizer.get_int_val());
@@ -403,33 +437,32 @@ void CompilationEngine::compile_term(){
             vmwriter.write_pop(VMWriter::Segment::POINTER, 1);
             vmwriter.write_push(VMWriter::Segment::THAT, 0);
         }
-        else if(tokenizer.current_token == "(" || tokenizer.current_token == "."){
-            if(tokenizer.current_token == "."){ // sub routine of diff variable
-                eat(".");
+        else if(tokenizer.current_token == "."){ // sub routine of diff variable
+            eat(".");
                 
-                std::string subroutine_name = eat_identifier();
+            std::string subroutine_name = eat_identifier();
 
-                eat("(");
-                int num_of_args = compile_expression_list();
-                eat(")");
+            eat("(");
+            int num_of_args = compile_expression_list();
+            eat(")");
 
-                if(symbol_table.exists(name)){ // method
-                    SymbolTable::Kind kind = symbol_table.get_kind(name);
-                    int index = symbol_table.get_index(name);
-                    vmwriter.write_push(kind_to_segment(kind), index);
-                    num_of_args++;
-                }
-                
-                vmwriter.write_call(name + "." + subroutine_name, num_of_args);
+            if(symbol_table.exists(name)){ // method
+                SymbolTable::Kind kind = symbol_table.get_kind(name);
+                int index = symbol_table.get_index(name);
+                vmwriter.write_push(kind_to_segment(kind), index);
+                num_of_args++;
+                name = symbol_table.get_type(name);
             }
-            else{ // method
-                eat("(");
-                int num_of_args = compile_expression_list();
-                eat(")");
+            
+            vmwriter.write_call(name + "." + subroutine_name, num_of_args);
+        }
+        else if(tokenizer.current_token == "("){ // method (implicit this)
+            eat("(");
+            int num_of_args = compile_expression_list();
+            eat(")");
 
-                vmwriter.write_push(VMWriter::Segment::POINTER, 0);
-                vmwriter.write_call(name, num_of_args + 1);
-            }
+            vmwriter.write_push(VMWriter::Segment::POINTER, 0);
+            vmwriter.write_call(current_class_name + "." + name, num_of_args + 1);
         }
         else{ // normal variable
             SymbolTable::Kind kind = symbol_table.get_kind(name);
@@ -469,7 +502,7 @@ void CompilationEngine::compile_term(){
             vmwriter.write_push(VMWriter::Segment::CONST, 0);
         }
         else if(tokenizer.current_token == "null"){
-            eat("false");
+            eat("null");
             vmwriter.write_push(VMWriter::Segment::CONST, 0);
         }
         else if(tokenizer.current_token == "this"){
@@ -487,6 +520,8 @@ void CompilationEngine::compile_term(){
 }
 
 int CompilationEngine::compile_expression_list(){
+    TraceGuard trace_guard(*this, "compile_expression_list");
+
     int num_of_exp = 0;
 
     if(tokenizer.current_token != ")"){

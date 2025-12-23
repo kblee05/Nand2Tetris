@@ -24,6 +24,8 @@ SymbolTable::SymbolTable(){
 
 void SymbolTable::reset(){
     subroutine_table.clear();
+    indices[Kind::VAR] = 0;
+    indices[Kind::ARG] = 0;
 }
 
 void SymbolTable::define(std::string name, std::string type, SymbolTable::Kind kind){
