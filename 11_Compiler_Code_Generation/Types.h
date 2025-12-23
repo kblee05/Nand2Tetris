@@ -1,7 +1,5 @@
 #ifndef TYPES_H
-#define TYPES_h
-
-#pragma once
+#define TYPES_H
 
 #include <set>
 #include <string>
